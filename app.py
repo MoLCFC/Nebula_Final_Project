@@ -5,6 +5,7 @@ import psycopg2
 import os
 from dotenv import load_dotenv
 import pandas as pd
+from json import jsonify
 
 #WE HAVE ERRORS HERE
 
