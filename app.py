@@ -1,11 +1,11 @@
-from flask import Flask, send_file
+from flask import Flask, send_file, jsonify
 import matplotlib.pyplot as plt
 import io
 import psycopg2
 import os
 from dotenv import load_dotenv
 import pandas as pd
-from json import jsonify
+
 
 #WE HAVE ERRORS HERE
 
