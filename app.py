@@ -1,4 +1,4 @@
-from flask import Flask, send_file, jsonify
+from flask import Flask, send_file, jsonify, render_template_string
 import matplotlib.pyplot as plt
 import io
 import psycopg2
@@ -6,11 +6,7 @@ import os
 from dotenv import load_dotenv
 import pandas as pd
 
-
-#WE HAVE ERRORS HERE
-
-
-load_dotenv()  # This loads the environment variables from your .env file
+load_dotenv()  # Load environment variables from the .env file
 app = Flask(__name__)
 
 def get_db_connection():
@@ -29,59 +25,57 @@ def create_temperature_plot():
     cur.close()
     conn.close()
 
-    # Convert the data into a DataFrame for easier plotting
     df = pd.DataFrame(data, columns=['period', 'temperature', 'scraped_at'])
-
-    # Clean and prepare the data
     df['temperature'] = df['temperature'].str.extract('(\d+)').astype(int)
     df['scraped_at'] = pd.to_datetime(df['scraped_at']).dt.date
 
-    # Create a plot
     fig, ax = plt.subplots()
     ax.plot(df['scraped_at'], df['temperature'], marker='o', linestyle='-')
     ax.set(title='Weekly Temperature Trends', xlabel='Date', ylabel='Temperature (°F)')
     ax.grid(True)
-
-    return fig
-
+    return fig, df
 
 @app.route('/temperature_trends')
 def temperature_trends():
-    fig = create_temperature_plot()
+    fig, _ = create_temperature_plot()
     buf = io.BytesIO()
     fig.savefig(buf, format='png')
-    plt.close(fig)  # Close the plot to free up memory
+    plt.close(fig)
     buf.seek(0)
-
-    # Send the buffer as a response
     return send_file(buf, mimetype='image/png')
 
-def get_db_connection():
-    conn = psycopg2.connect(os.environ['DATABASE_URL'])
-    return conn
+@app.route('/temperature_table')
+def temperature_table():
+    _, df = create_temperature_plot()
+    # Render DataFrame as HTML table
+    html_table = df.to_html(classes='table table-striped table-hover', index=False)
+    return render_template_string("""
+        <html>
+            <head>
+                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css">
+                <title>Temperature Data</title>
+            </head>
+            <body>
+                <h1>Temperature Table</h1>
+                {{ table|safe }}
+            </body>
+        </html>
+        """, table=html_table)
 
-
-@app.route('/weather', methods=['GET'])
-def get_weather():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    # Assuming 'scraped_at' is storing the datetime of when the data was scraped
-    cur.execute("""
-        SELECT id, period, short_desc, temperature, scraped_at
-        FROM weather_forecasts
-        WHERE scraped_at >= current_date - INTERVAL '1 week'
-        ORDER BY scraped_at DESC;
-    """)
-    weather_data = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    # Prepare the data for JSON response
-    columns = ['id', 'period', 'short_desc', 'temperature', 'scraped_at']
-    result = [dict(zip(columns, row)) for row in weather_data]
-
-    return jsonify(result)
+@app.route('/temperature_chart')
+def temperature_chart():
+    fig, df = create_temperature_plot()
+    # Optionally create another style of chart, here we'll use a bar chart
+    fig, ax = plt.subplots()
+    ax.bar(df['scraped_at'], df['temperature'], color='blue')
+    ax.set(title='Weekly Temperature Bar Chart', xlabel='Date', ylabel='Temperature (°F)')
+    ax.grid(True)
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png')
+    plt.close(fig)
+    buf.seek(0)
+    return send_file(buf, mimetype='image/png')
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0',port=10000, debug=True)
+    app.run(host='0.0.0.0', port=10000, debug=True)
